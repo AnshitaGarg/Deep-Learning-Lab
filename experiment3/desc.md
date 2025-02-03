@@ -72,5 +72,4 @@ ResNet-18 is a deep convolutional network developed to address the vanishing gra
 
 -
 
->>>>>>> 397e07eda5106d64a19823b47e233dccf8b59f56
->>>>>>> 73058a6432d9566837e80825f7eaca12a4c6e992
+

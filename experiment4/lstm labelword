@@ -1,0 +1,83 @@
+import tensorflow as tf
+from tensorflow.keras.layers import LSTM, Dense, Embedding
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+import numpy as np
+
+# Load and preprocess the poetry dataset
+def load_poetry_data(filepath):
+    with open(filepath, 'r', encoding='utf-8') as f:
+        text = f.read()
+
+    text = text.lower()  
+    chars = sorted(list(set(text)))  
+    char_to_index = {c: i for i, c in enumerate(chars)}  
+    index_to_char = {i: c for i, c in enumerate(chars)}  
+
+    return text, chars, char_to_index, index_to_char
+
+# Prepare sequences for training
+def prepare_sequences(text, seq_length, char_to_index):
+    sequences = []
+    targets = []
+    
+    for i in range(len(text) - seq_length):
+        seq = [char_to_index[char] for char in text[i: i + seq_length]]
+        target = char_to_index[text[i + seq_length]]  
+        sequences.append(seq)
+        targets.append(target)
+    
+    X = pad_sequences(sequences, maxlen=seq_length, padding='pre')  
+    y = np.array(targets)  
+
+    return np.array(X), y
+
+# Build the LSTM model with label word embeddings
+def build_model(vocab_size, seq_length, embedding_dim=128, hidden_units=256):
+    model = Sequential([
+        Embedding(vocab_size, embedding_dim, input_length=seq_length),
+        LSTM(hidden_units, return_sequences=True),
+        LSTM(hidden_units),
+        Dense(vocab_size, activation='softmax')
+    ])
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    return model
+
+# Generate text using the trained model
+def generate_text(model, start_string, length, seq_length, char_to_index, index_to_char, temperature=1.0):
+    generated_text = start_string
+
+    for _ in range(length):
+        sequence = [char_to_index[char] for char in generated_text[-seq_length:] if char in char_to_index]
+        sequence = pad_sequences([sequence], maxlen=seq_length, padding='pre')
+
+        predicted_probs = model.predict(sequence, verbose=0)[0]
+        predicted_index = np.random.choice(len(predicted_probs), p=predicted_probs)
+        predicted_char = index_to_char[predicted_index]
+
+        generated_text += predicted_char
+
+    return generated_text
+
+# Main execution
+if __name__ == "__main__":
+    # Load dataset
+    file_path = "/content/drive/My Drive/poems-100.csv"  
+    text, chars, char_to_index, index_to_char = load_poetry_data(file_path)
+
+    # Define hyperparameters
+    seq_length = 100 
+    vocab_size = len(chars)
+
+    # Prepare training data
+    X, y = prepare_sequences(text, seq_length, char_to_index)
+
+    # Build and train the model
+    model = build_model(vocab_size, seq_length)
+    model.fit(X, y, epochs=10, batch_size=128)
+
+    # Generate new poetry
+    start_text = "The sun sets on the horizon"
+    generated_poem = generate_text(model, start_text, 100, seq_length, char_to_index, index_to_char)
+
+    print("\nGenerated Poem:\n", generated_poem)

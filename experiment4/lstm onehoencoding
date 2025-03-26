@@ -10,10 +10,10 @@ def load_poetry_data(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         text = f.read()
 
-    text = text.lower()  # Normalize to lowercase
-    chars = sorted(list(set(text)))  # Unique characters
-    char_to_index = {c: i for i, c in enumerate(chars)}  # Mapping
-    index_to_char = {i: c for i, c in enumerate(chars)}  # Reverse mapping
+    text = text.lower()  
+    chars = sorted(list(set(text)))  
+    char_to_index = {c: i for i, c in enumerate(chars)}  
+    index_to_char = {i: c for i, c in enumerate(chars)}  
 
     return text, chars, char_to_index, index_to_char
 
@@ -28,7 +28,7 @@ def prepare_sequences(text, seq_length, char_to_index):
         sequences.append(seq)
         targets.append(target)
     
-    X = pad_sequences(sequences, maxlen=seq_length, padding='post')  # Ensure uniform length
+    X = pad_sequences(sequences, maxlen=seq_length, padding='post')  
     y = to_categorical(targets, num_classes=len(char_to_index))  # One-hot encode target
     
     return np.array(X), np.array(y)
@@ -53,7 +53,7 @@ def generate_text(model, start_string, length, seq_length, char_to_index, index_
         sequence = pad_sequences([sequence], maxlen=seq_length, padding='post')
         
         predicted_probs = model.predict(sequence, verbose=0)[0]
-        predicted_index = np.argmax(predicted_probs)  # Get most probable next char
+        predicted_index = np.argmax(predicted_probs)  
         predicted_char = index_to_char[predicted_index]
 
         generated_text += predicted_char
@@ -63,7 +63,7 @@ def generate_text(model, start_string, length, seq_length, char_to_index, index_
 # Main execution
 if __name__ == "__main__":
     # Load dataset
-    file_path = "/content/drive/My Drive/poems-100.csv"  # Change this if needed
+    file_path = "/content/drive/My Drive/poems-100.csv"  
     text, chars, char_to_index, index_to_char = load_poetry_data(file_path)
 
     # Define hyperparameters

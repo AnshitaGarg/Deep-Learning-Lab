@@ -1,0 +1,122 @@
+from google.colab import files
+import pandas as pd
+
+# Upload your dataset file (assumed CSV with 'English' and 'Spanish' columns)
+uploaded = files.upload()
+
+# Replace 'your_dataset.csv' with the uploaded filename
+df = pd.read_csv('your_dataset.csv')
+df = df[['English', 'Spanish']].dropna()
+
+import tensorflow as tf
+import numpy as np
+import re
+import matplotlib as pyplot
+
+def preprocess_sentence(sentence):
+    sentence = sentence.lower().strip()
+    sentence = re.sub(r"([?.!,¿])", r" \1 ", sentence)
+    sentence = re.sub(r'[" "]+', " ", sentence)
+    sentence = re.sub(r"[^a-zA-Z?.!,¿]+", " ", sentence)
+    sentence = sentence.strip()
+    sentence = '<start> ' + sentence + ' <end>'
+    return sentence
+
+input_tensor = [preprocess_sentence(sent) for sent in df['English'].values]
+target_tensor = [preprocess_sentence(sent) for sent in df['Spanish'].values]
+
+# Tokenize
+tokenizer_inp = tf.keras.preprocessing.text.Tokenizer(filters='')
+tokenizer_inp.fit_on_texts(input_tensor)
+input_tensor = tokenizer_inp.texts_to_sequences(input_tensor)
+input_tensor = tf.keras.preprocessing.sequence.pad_sequences(input_tensor, 
+padding='post')
+
+tokenizer_tar = tf.keras.preprocessing.text.Tokenizer(filters='')
+tokenizer_tar.fit_on_texts(target_tensor)
+target_tensor = tokenizer_tar.texts_to_sequences(target_tensor)
+target_tensor = tf.keras.preprocessing.sequence.pad_sequences(target_tensor, 
+padding='post')
+
+# Train-test split
+from sklearn.model_selection import train_test_split
+input_train, input_val, target_train, target_val = train_test_split(input_tensor, 
+target_tensor, test_size=0.2)
+
+class Encoder(tf.keras.Model):
+    def __init__(self, vocab_size, embedding_dim, enc_units):
+        super(Encoder, self).__init__()
+        self.enc_units = enc_units
+        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
+        self.lstm = tf.keras.layers.LSTM(enc_units, return_sequences=True, 
+        return_state=True)
+
+    def call(self, x):
+        x = self.embedding(x)
+        output, h, c = self.lstm(x)
+        return output, h, c
+
+class BahdanauAttention(tf.keras.layers.Layer):
+    def __init__(self, units):
+        super(BahdanauAttention, self).__init__()
+        self.W1 = tf.keras.layers.Dense(units)
+        self.W2 = tf.keras.layers.Dense(units)
+        self.V = tf.keras.layers.Dense(1)
+
+    def call(self, query, values):
+        query = tf.expand_dims(query, 1)
+        score = self.V(tf.nn.tanh(self.W1(values) + self.W2(query)))
+        attention_weights = tf.nn.softmax(score, axis=1)
+        context_vector = attention_weights * values
+        context_vector = tf.reduce_sum(context_vector, axis=1)
+        return context_vector, attention_weights
+class LuongAttention(tf.keras.layers.Layer):
+    def __init__(self, units):
+        super(LuongAttention, self).__init__()
+        self.W = tf.keras.layers.Dense(units)
+
+    def call(self, query, values):
+        score = tf.matmul(self.W(values), query[:, :, None])
+        score = tf.squeeze(score, -1)
+        attention_weights = tf.nn.softmax(score, axis=1)
+        context_vector = tf.reduce_sum(values * tf.expand_dims(attention_weights, -1), axis=1)
+        return context_vector, attention_weights
+
+class Decoder(tf.keras.Model):
+    def __init__(self, vocab_size, embedding_dim, dec_units, 
+    attention_type='bahdanau'):
+        super(Decoder, self).__init__()
+        self.attention_type = attention_type
+        self.dec_units = dec_units
+        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
+        self.lstm = tf.keras.layers.LSTM(dec_units, return_sequences=True, return_state=True)
+        self.fc = tf.keras.layers.Dense(vocab_size)
+
+        if attention_type == 'bahdanau':
+            self.attention = BahdanauAttention(dec_units)
+        else:
+            self.attention = LuongAttention(dec_units)
+
+    def call(self, x, hidden, enc_output):
+        context_vector, attention_weights = self.attention(hidden, enc_output)
+        x = self.embedding(x)
+        x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
+        output, h, c = self.lstm(x)
+        output = tf.reshape(output, (-1, output.shape[2]))
+        x = self.fc(output)
+        return x, h, c, attention_weights
+
+def plot_training_history(train_acc, val_acc, metric='Accuracy'):
+    epochs = range(1, len(train_acc) + 1)
+    
+    plt.figure(figsize=(8, 5))
+    plt.plot(epochs, train_acc, marker='o', label=f'Training {metric}')
+    plt.plot(epochs, val_acc, marker='s', label=f'Validation {metric}')
+    plt.title(f'Training and Validation {metric}')
+    plt.xlabel('Epochs')
+    plt.ylabel(metric)
+    plt.xticks(epochs)
+    plt.ylim(0, 1)
+    plt.grid(True)
+    plt.legend()
+    plt.show()

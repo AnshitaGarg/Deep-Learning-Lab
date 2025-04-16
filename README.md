@@ -13,3 +13,11 @@ In this experiment, we implement a Convolutional Neural Network (CNN) from scrat
 In this experiment, is to explore text generation using Recurrent Neural Networks (RNNs) and understand the impact of different word representations:
 1. One-Hot Encoding
 2. Trainable Word Embeddings
+
+# Experiment 5
+To implement a Sequence-to-Sequence (Seq2Seq) model for English-to-Spanish translation using LSTM networks. This experiment explores two major architectures:
+1.      LSTM Encoder-Decoder without Attention
+2.      LSTM Encoder-Decoder with Attention:
+·         Bahdanau (Additive) Attention
+ Luong (Multiplicative) Attention
+Each model is evaluated using BLEU scores and visualizations on the English-Spanish Dataset.

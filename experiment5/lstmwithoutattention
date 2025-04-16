@@ -1,0 +1,102 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, LSTM, Dense
+from sklearn.model_selection import train_test_split
+
+# === 1. Load the Dataset ===
+# Replace 'eng_spa.txt' with your file path if different
+lines = open('eng_spa.txt', encoding='utf-8').read().strip().split('\n')
+input_texts = []
+target_texts = []
+
+for line in lines:
+    try:
+        input_text, target_text = line.split('\t')
+        target_text = '\t' + target_text + '\n'  # Add start and end tokens
+        input_texts.append(input_text)
+        target_texts.append(target_text)
+    except ValueError:
+        continue  # Skip malformed lines
+
+# === 2. Character Sets and Indexing ===
+input_characters = sorted(list(set(char for text in input_texts for char in text)))
+target_characters=sorted(list(set(char for text in target_texts for char in text)))
+
+num_encoder_tokens = len(input_characters)
+num_decoder_tokens = len(target_characters)
+max_encoder_seq_length = max(len(txt) for txt in input_texts)
+max_decoder_seq_length = max(len(txt) for txt in target_texts)
+
+input_token_index = {char: i for i, char in enumerate(input_characters)}
+target_token_index = {char: i for i, char in enumerate(target_characters)}
+
+# === 3. One-Hot Encoding ===
+encoder_input_data = np.zeros((len(input_texts), max_encoder_seq_length, 
+num_encoder_tokens), dtype='float32')
+decoder_input_data = np.zeros((len(input_texts), max_decoder_seq_length, 
+num_decoder_tokens), dtype='float32')
+decoder_target_data = np.zeros((len(input_texts), max_decoder_seq_length, n
+num_decoder_tokens), dtype='float32')
+
+for i, (input_text, target_text) in enumerate(zip(input_texts, target_texts)):
+    for t, char in enumerate(input_text):
+        encoder_input_data[i, t, input_token_index[char]] = 1.0
+    for t, char in enumerate(target_text):
+        decoder_input_data[i, t, target_token_index[char]] = 1.0
+        if t > 0:
+            decoder_target_data[i, t - 1, target_token_index[char]] = 1.0
+
+# === 4. Build the Seq2Seq Model ===
+latent_dim = 256  # LSTM hidden units
+
+# Encoder
+encoder_inputs = Input(shape=(None, num_encoder_tokens))
+encoder_lstm = LSTM(latent_dim, return_state=True)
+_, state_h, state_c = encoder_lstm(encoder_inputs)
+encoder_states = [state_h, state_c]
+
+# Decoder
+decoder_inputs = Input(shape=(None, num_decoder_tokens))
+decoder_lstm = LSTM(latent_dim, return_sequences=True, return_state=True)
+decoder_outputs, _, _ = decoder_lstm(decoder_inputs, initial_state=encoder_states)
+decoder_dense = Dense(num_decoder_tokens, activation='softmax')
+decoder_outputs = decoder_dense(decoder_outputs)
+
+model = Model([encoder_inputs, decoder_inputs], decoder_outputs)
+
+# Compile and Train (10 Epochs) 
+model.compile(optimizer='rmsprop', loss='categorical_crossentropy', 
+metrics=['accuracy'])
+
+history = model.fit(
+    [encoder_input_data, decoder_input_data], decoder_target_data,
+    batch_size=64,
+    epochs=10,
+    validation_split=0.2
+)
+
+#Plot Loss and Accuracy
+# Loss
+plt.figure(figsize=(12, 4))
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Train Loss', marker='o')
+plt.plot(history.history['val_loss'], label='Validation Loss', marker='s')
+plt.title('Loss Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.grid(True)
+plt.legend()
+
+# Accuracy
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Train Accuracy', marker='o')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy', marker='s')
+plt.title('Accuracy Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.grid(True)
+plt.legend()
+
+plt.tight_layout()
+plt.show()
